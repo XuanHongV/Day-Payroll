@@ -58,8 +58,7 @@ export const Header = ({ user, onLogout }: HeaderProps) => {
       </div>
 
       <div className="flex items-center space-x-3 md:space-x-5">
-
-        {walletAddress ? (
+        {/* {walletAddress ? (
           <div className="hidden md:flex items-center px-3 py-1.5 bg-green-50 text-green-700 rounded-lg border border-green-200 text-sm font-mono">
             <span className="w-2 h-2 bg-green-500 rounded-full mr-2 animate-pulse"></span>
             {formatAddress(walletAddress)}
@@ -72,7 +71,7 @@ export const Header = ({ user, onLogout }: HeaderProps) => {
             <Wallet className="w-4 h-4 mr-2" />
             Kết nối Ví
           </button>
-        )}
+        )} */}
 
         <button className="relative p-2 text-gray-400 hover:text-gray-600 transition-colors">
           <Bell className="w-6 h-6" />
