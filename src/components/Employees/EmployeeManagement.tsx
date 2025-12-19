@@ -1,365 +1,532 @@
-import React, { useState, useEffect, FormEvent, useRef } from 'react';
-import { Search, Filter, Plus, Edit, X, Camera, RefreshCw, QrCode, Download } from 'lucide-react';
+import React, { useState, FormEvent, useRef } from 'react';
+import { 
+  Search, Plus, X, RefreshCw, QrCode, Download, 
+  FileText, ChevronLeft, ChevronRight, Trash2, FileSpreadsheet, Wallet
+} from 'lucide-react';
 import { QRCodeCanvas } from 'qrcode.react';
-import { Employee } from '../../types';
-import api from '../../services/apiService';
 
-interface DepartmentOption {
-  _id: string;
-  name: string;
+// --- 1. ĐỊNH NGHĨA DATA TYPE & MOCK DATA ---
+interface Employee {
+  id: string;
+  code: string;         // Mã NV
+  fullName: string;     // Tên nhân viên
+  gender: 'Nam' | 'Nữ' | 'Khác';
+  dob: string;          // Ngày sinh
+  cmnd: string;         // Số CMND
+  position: string;     // Chức danh
+  department: string;   // Tên đơn vị
+  bankAccount: string;  // Số tài khoản
+  bankName: string;     // Tên ngân hàng
+  bankBranch: string;   // Chi nhánh
+  
+  // Dữ liệu Blockchain & AI Project
+  walletAddress: string; 
+  email: string;
+  address: string;
+  mobile: string;
+  landline: string;
+  issueDate: string;
+  issuePlace: string;
+  status: 'active' | 'inactive';
 }
 
-type EmployeeFormState = Omit<Employee, 'id' | 'joinDate'>;
+const MOCK_DEPARTMENTS = [
+  'Phòng Nhân sự', 'Phòng Kỹ thuật (Tech)', 'Phòng Kế toán', 'Ban Giám đốc', 'Kho vận', 'Sản xuất'
+];
 
-const defaultEmployeeForm: EmployeeFormState = {
-  fullName: '',
-  email: '',
-  position: '',
-  department: '',
-  walletAddress: '',
-  status: 'active',
-  avatar: '',
+const INITIAL_DATA: Employee[] = [
+  {
+    id: '1', code: 'NV-00012', fullName: 'Nguyễn Văn Liệt', gender: 'Nam', dob: '31/12/1989', cmnd: '362520365', position: 'Trưởng nhóm', department: 'Sản xuất', 
+    bankAccount: '1903333333', bankName: 'Vietcombank', bankBranch: 'TP.HCM', walletAddress: '0x71C...9A2',
+    email: 'lietnv@example.com', address: 'TP.HCM', mobile: '0909123456', landline: '', issueDate: '01/01/2010', issuePlace: 'HCM', status: 'active'
+  },
+  {
+    id: '2', code: 'NV-000575', fullName: 'Lưu Thủy Bình', gender: 'Nam', dob: '15/05/1990', cmnd: '385659258', position: 'Nhân viên', department: 'Phòng Kỹ thuật (Tech)', 
+    bankAccount: '', bankName: '', bankBranch: '', walletAddress: '0x82B...1C4',
+    email: 'binhlt@example.com', address: 'Hà Nội', mobile: '0912345678', landline: '', issueDate: '15/05/2012', issuePlace: 'Hà Nội', status: 'active'
+  },
+  {
+    id: '3', code: 'NV-1644', fullName: 'Nguyễn Ánh Bằng', gender: 'Nam', dob: '16/12/1980', cmnd: '6013758468', position: 'Lễ tân chính', department: 'Phòng Nhân sự', 
+    bankAccount: '944147', bankName: 'Vietcombank', bankBranch: 'Chi nhánh 6', walletAddress: '0xA3D...7F1',
+    email: 'bangna@example.com', address: '146 Phạm Văn Chiêu', mobile: '0963579744', landline: '(764) 749-6478', issueDate: '01/11/1986', issuePlace: 'Hải Phòng', status: 'active'
+  },
+  {
+      id: '4', code: 'NV-00173', fullName: 'Nguyễn Thị Thanh Hồng', gender: 'Nữ', dob: '20/07/1995', cmnd: '023459348', position: 'Kiểm thử (QA)', department: 'Phòng Kỹ thuật (Tech)', 
+      bankAccount: '0071000999', bankName: 'Techcombank', bankBranch: 'Bình Dương', walletAddress: '0xB4E...8G2',
+      email: 'hongnt@example.com', address: 'Bình Dương', mobile: '0933444555', landline: '', issueDate: '10/02/2018', issuePlace: 'Bình Dương', status: 'active'
+  },
+  {
+      id: '5', code: 'NV-00220', fullName: 'Trần Thái Cường', gender: 'Nam', dob: '05/11/1994', cmnd: '021189203', position: 'Lập trình viên', department: 'Phòng Kỹ thuật (Tech)', 
+      bankAccount: '654321', bankName: 'ACB', bankBranch: 'Sài Gòn', walletAddress: '0xC5F...9H3',
+      email: 'cuongtt@example.com', address: 'Q12, TP.HCM', mobile: '0977888999', landline: '', issueDate: '20/06/2016', issuePlace: 'HCM', status: 'active'
+  }
+];
+
+const defaultForm: Omit<Employee, 'id'> = {
+  code: '', fullName: '', gender: 'Nam', dob: '', cmnd: '', position: '', department: '', bankAccount: '', bankName: '', bankBranch: '',
+  email: '', address: '', mobile: '', landline: '', issueDate: '', issuePlace: '', status: 'active', walletAddress: ''
 };
 
 export const EmployeeManagement: React.FC = () => {
-  const [employees, setEmployees] = useState<Employee[]>([]);
-  const [departments, setDepartments] = useState<DepartmentOption[]>([]);
-  const [loading, setLoading] = useState(true);
-
+  // --- STATE ---
+  const [employees, setEmployees] = useState<Employee[]>(INITIAL_DATA);
   const [searchTerm, setSearchTerm] = useState('');
-  const [filterDept, setFilterDept] = useState<string>('all');
+  
+  // Selection State (Cho việc xóa nhiều)
+  const [selectedIds, setSelectedIds] = useState<string[]>([]);
+  
+  // Pagination
+  const [currentPage, setCurrentPage] = useState(1);
+  const [itemsPerPage, setItemsPerPage] = useState(20);
 
+  // Modal Form
   const [isModalOpen, setIsModalOpen] = useState(false);
-  const [editingEmployee, setEditingEmployee] = useState<Employee | null>(null);
-  const [formData, setFormData] = useState<EmployeeFormState>(defaultEmployeeForm);
+  const [editingId, setEditingId] = useState<string | null>(null);
+  const [formData, setFormData] = useState(defaultForm);
 
+  // QR Modal
   const [qrModalOpen, setQrModalOpen] = useState(false);
   const [qrEmployee, setQrEmployee] = useState<Employee | null>(null);
   const qrRef = useRef<HTMLDivElement>(null);
 
-  const fetchData = async () => {
-    setLoading(true);
-    try {
-      const [usersRes, deptsRes] = await Promise.all([
-        api.get('/users'),
-        api.get('/departments')
-      ]);
+  // --- LOGIC ---
+  
+  // 1. Filter
+  const filteredEmployees = employees.filter(emp => 
+    emp.fullName.toLowerCase().includes(searchTerm.toLowerCase()) || 
+    emp.code.toLowerCase().includes(searchTerm.toLowerCase())
+  );
 
-      const staffOnly = usersRes.data.filter((u: any) => u.role === 'STAFF');
-      const mappedEmployees = staffOnly.map((u: any) => ({
-        id: u._id,
-        fullName: u.fullName,
-        email: u.email,
-        position: u.position || 'Nhân viên',
-        department: u.department || 'Chưa cập nhật',
-        walletAddress: u.walletAddress || '',
-        status: u.status === 'ACTIVE' ? 'active' : 'inactive',
-        joinDate: u.createdAt,
-        avatar: u.avatar || `https://ui-avatars.com/api/?name=${encodeURIComponent(u.fullName)}&background=random&color=fff`
-      }));
+  // 2. Pagination
+  const indexOfLastItem = currentPage * itemsPerPage;
+  const indexOfFirstItem = indexOfLastItem - itemsPerPage;
+  const currentItems = filteredEmployees.slice(indexOfFirstItem, indexOfLastItem);
+  const totalPages = Math.ceil(filteredEmployees.length / itemsPerPage);
 
-      setDepartments(deptsRes.data);
-      setEmployees(mappedEmployees);
-    } catch (error) {
-      console.error("Lỗi tải dữ liệu:", error);
-    } finally {
-      setLoading(false);
+  // 3. SELECTION LOGIC (CHECKBOX)
+  const handleSelectAll = (e: React.ChangeEvent<HTMLInputElement>) => {
+    if (e.target.checked) {
+      // Chọn tất cả ID trong trang hiện tại
+      const allIds = currentItems.map(item => item.id);
+      // Gộp với những cái đã chọn trước đó (nếu muốn giữ state qua các trang)
+      // Hoặc chỉ chọn trang hiện tại:
+      setSelectedIds(allIds);
+    } else {
+      setSelectedIds([]);
     }
   };
 
-  useEffect(() => {
-    fetchData();
-  }, []);
-
-  const filteredEmployees = employees.filter(employee => {
-    const searchLower = searchTerm.toLowerCase();
-    const matchesSearch = employee.fullName.toLowerCase().includes(searchLower) ||
-      employee.email.toLowerCase().includes(searchLower) ||
-      employee.position.toLowerCase().includes(searchLower);
-    const matchesDept = filterDept === 'all' || employee.department === filterDept;
-    return matchesSearch && matchesDept;
-  });
-
-  const getStatusColor = (status: string) => {
-    return status === 'active' ? 'bg-green-100 text-green-800' : 'bg-gray-100 text-gray-800';
+  const handleSelectOne = (id: string) => {
+    if (selectedIds.includes(id)) {
+      setSelectedIds(selectedIds.filter(item => item !== id));
+    } else {
+      setSelectedIds([...selectedIds, id]);
+    }
   };
 
+  // 4. DELETE LOGIC (SINGLE & BULK)
+  const handleDeleteOne = (emp: Employee) => {
+    if (window.confirm(`Bạn có chắc muốn xóa nhân viên <${emp.code} - ${emp.fullName}> không?`)) {
+      setEmployees(prev => prev.filter(e => e.id !== emp.id));
+      setSelectedIds(prev => prev.filter(id => id !== emp.id)); // Xóa khỏi danh sách chọn nếu có
+    }
+  };
+
+  const handleDeleteSelected = () => {
+    if (selectedIds.length === 0) return;
+    if (window.confirm(`HỆ THỐNG CẢNH BÁO:\n\nBạn đang yêu cầu XÓA ${selectedIds.length} nhân viên đã chọn.\nHành động này không thể hoàn tác.\n\nBạn có chắc chắn muốn tiếp tục?`)) {
+      setEmployees(prev => prev.filter(e => !selectedIds.includes(e.id)));
+      setSelectedIds([]); // Reset selection
+    }
+  };
+
+  // 5. EXPORT LOGIC
+  const handleExport = () => {
+    // Header chuẩn theo yêu cầu
+    const headers = [
+      "Mã NV", "Tên nhân viên", "Giới tính", "Ngày sinh", "Số CMND", "Chức danh", 
+      "Tên đơn vị", "Số tài khoản", "Tên ngân hàng", "Chi nhánh TK", 
+      "Ví Blockchain (Smart Contract)", "Email", "Điện thoại" // Thêm cột ví
+    ];
+
+    // Data rows
+    const rows = filteredEmployees.map(e => [
+      e.code, e.fullName, e.gender, e.dob, `"${e.cmnd}"`, e.position, 
+      e.department, `"${e.bankAccount}"`, e.bankName, e.bankBranch,
+      e.walletAddress, e.email, `"${e.mobile}"`
+    ]);
+
+    // Combine with BOM for Excel Vietnamese support
+    const csvContent = [
+      headers.join(","), 
+      ...rows.map(r => r.join(","))
+    ].join("\n");
+
+    const blob = new Blob(["\uFEFF" + csvContent], { type: 'text/csv;charset=utf-8;' });
+    const url = URL.createObjectURL(blob);
+    const link = document.createElement("a");
+    link.href = url;
+    link.setAttribute("download", `Danh_sach_nhan_vien_${new Date().toISOString().slice(0,10)}.csv`);
+    document.body.appendChild(link);
+    link.click();
+    document.body.removeChild(link);
+  };
+
+  // 6. Form Handlers
   const handleOpenModal = (employee: Employee | null) => {
     if (employee) {
-      setEditingEmployee(employee);
-      setFormData({
-        fullName: employee.fullName,
-        email: employee.email,
-        position: employee.position,
-        department: employee.department,
-        walletAddress: employee.walletAddress,
-        status: employee.status,
-        avatar: employee.avatar,
-      });
+      setEditingId(employee.id);
+      setFormData(employee);
     } else {
-      setEditingEmployee(null);
-      setFormData({
-        ...defaultEmployeeForm,
-        department: departments.length > 0 ? departments[0].name : ''
-      });
+      setEditingId(null);
+      setFormData({ ...defaultForm, code: `NV-${Math.floor(Math.random()*10000)}`, department: MOCK_DEPARTMENTS[0] });
     }
     setIsModalOpen(true);
   };
 
-  const handleCloseModal = () => {
-    setIsModalOpen(false);
-    setEditingEmployee(null);
-    setFormData(defaultEmployeeForm);
-  };
-
-  const handleOpenQr = (employee: Employee) => {
-    setQrEmployee(employee);
-    setQrModalOpen(true);
-  };
-
-  const downloadQRCode = () => {
-    const canvas = qrRef.current?.querySelector('canvas');
-    if (canvas) {
-      const url = canvas.toDataURL();
-      const a = document.createElement('a');
-      a.download = `QR_${qrEmployee?.fullName}.png`;
-      a.href = url;
-      document.body.appendChild(a);
-      a.click();
-      document.body.removeChild(a);
-    }
-  };
-
-  const handleChange = (e: React.ChangeEvent<HTMLInputElement | HTMLSelectElement>) => {
-    const { name, value } = e.target;
-    setFormData(prev => ({ ...prev, [name]: value }));
-  };
-
-  const handleGenerateAvatar = () => {
-    const name = formData.fullName || 'User';
-    const newAvatarUrl = `https://ui-avatars.com/api/?name=${encodeURIComponent(name)}&background=random&color=fff&size=128&bold=true`;
-    setFormData(prev => ({ ...prev, avatar: newAvatarUrl }));
-  };
-
-  const handleSubmit = async (e: FormEvent) => {
+  const handleSubmit = (e: FormEvent) => {
     e.preventDefault();
-
-    if (!formData.department) {
-      alert("Vui lòng chọn phòng ban!");
-      return;
+    if (editingId) {
+      setEmployees(prev => prev.map(emp => emp.id === editingId ? { ...formData, id: editingId } : emp));
+    } else {
+      setEmployees(prev => [...prev, { ...formData, id: Date.now().toString() }]);
     }
-
-    try {
-      const userStr = localStorage.getItem('user');
-      const currentUser = userStr ? JSON.parse(userStr) : null;
-      const adminCompanyCode = currentUser?.companyCode || "HONG";
-
-      const payload = {
-        ...formData,
-        status: formData.status === 'active' ? 'ACTIVE' : 'INACTIVE'
-      };
-
-      if (editingEmployee) {
-        await api.patch(`/users/${editingEmployee.id}`, payload);
-        alert("Cập nhật thông tin thành công!");
-      } else {
-        const newPayload = {
-          ...payload,
-          password: "123456@Default",
-          companyCode: adminCompanyCode,
-
-          status: 'ACTIVE'
-        };
-        await api.post('/auths/registerEmployee', newPayload);
-        alert("Thêm nhân viên thành công!");
-      }
-
-      fetchData();
-      handleCloseModal();
-
-    } catch (error: any) {
-      console.error("Lỗi khi lưu:", error);
-      const msg = error.response?.data?.message || "Có lỗi xảy ra";
-      alert(Array.isArray(msg) ? msg[0] : msg);
-    }
+    setIsModalOpen(false);
   };
 
-  if (loading) return <div className="p-10 text-center">Đang tải dữ liệu...</div>;
-
+  // --- RENDER ---
   return (
-    <div className="p-6 bg-gray-50 min-h-screen">
-      <div className="mb-8">
-        <h2 className="text-2xl font-bold text-gray-900 mb-2">Quản lý Nhân viên</h2>
-        <p className="text-gray-600">Thêm, sửa, và xem thông tin chi tiết của nhân viên.</p>
-      </div>
-
-      <div className="bg-white rounded-xl shadow-sm border border-gray-200 p-6 mb-6">
-        <div className="flex flex-col md:flex-row md:items-center md:justify-between space-y-4 md:space-y-0">
-          <div className="flex-1 max-w-md">
+    <div className="flex flex-col h-screen bg-gray-100 font-sans text-sm">
+      
+      {/* 1. HEADER (DANH SÁCH NHÂN VIÊN) */}
+      <div className="bg-white px-5 py-4 flex justify-between items-center shadow-sm border-b border-gray-200">
+        <div className="flex flex-col">
+            <h1 className="text-xl font-bold text-gray-800 uppercase tracking-tight">DANH SÁCH NHÂN VIÊN</h1>
+            <p className="text-xs text-gray-500 mt-0.5">Quản lý hồ sơ nhân sự & Ví Blockchain</p>
+        </div>
+        
+        <div className="flex items-center gap-3">
+             {/* THANH TÌM KIẾM */}
             <div className="relative">
-              <Search className="absolute left-3 top-1/2 transform -translate-y-1/2 text-gray-400 h-4 w-4" />
-              <input
-                type="text" placeholder="Tìm nhân viên..." value={searchTerm} onChange={(e) => setSearchTerm(e.target.value)}
-                className="w-full pl-10 pr-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500"
-              />
-            </div>
-          </div>
-          <div className="flex items-center space-x-4">
-            <div className="flex items-center space-x-2">
-              <Filter className="h-4 w-4 text-gray-400" />
-              <select value={filterDept} onChange={(e) => setFilterDept(e.target.value)} className="border border-gray-300 rounded-lg px-3 py-2 focus:ring-2 focus:ring-blue-500 bg-white">
-                <option value="all">Tất cả Phòng ban</option>
-                {departments.map(dept => (
-                  <option key={dept._id} value={dept.name}>{dept.name}</option>
-                ))}
-              </select>
-            </div>
-            <button onClick={() => handleOpenModal(null)} className="bg-blue-600 text-white px-4 py-2 rounded-lg hover:bg-blue-700 transition-colors flex items-center space-x-2">
-              <Plus className="h-4 w-4" /> <span>Thêm Nhân viên</span>
-            </button>
-          </div>
-        </div>
-      </div>
-
-      <div className="bg-white rounded-xl shadow-sm border border-gray-200 overflow-hidden">
-        <div className="overflow-x-auto">
-          <table className="w-full">
-            <thead className="bg-gray-50 border-b border-gray-200">
-              <tr>
-                <th className="text-left py-4 px-6 font-semibold text-gray-900">Nhân viên</th>
-                <th className="text-left py-4 px-6 font-semibold text-gray-900">Email</th>
-                <th className="text-left py-4 px-6 font-semibold text-gray-900">Chức vụ</th>
-                <th className="text-left py-4 px-6 font-semibold text-gray-900">Phòng ban</th>
-                <th className="text-left py-4 px-6 font-semibold text-gray-900">Trạng thái</th>
-                <th className="text-center py-4 px-6 font-semibold text-gray-900">Hành động</th>
-              </tr>
-            </thead>
-            <tbody className="divide-y divide-gray-200">
-              {filteredEmployees.length === 0 ? (
-                <tr><td colSpan={6} className="py-12 text-center text-gray-500">Không tìm thấy nhân viên nào.</td></tr>
-              ) : (
-                filteredEmployees.map((employee) => (
-                  <tr key={employee.id} className="hover:bg-gray-50 transition-colors">
-                    <td className="py-4 px-6">
-                      <div className="flex items-center space-x-3">
-                        <img src={employee.avatar} alt="avt" className="w-10 h-10 rounded-full object-cover border" />
-                        <div>
-                          <p className="text-sm font-bold text-gray-900">{employee.fullName}</p>
-                          <p className="text-xs text-gray-500 font-mono">ID: {employee.id.slice(-6)}</p>
-                        </div>
-                      </div>
-                    </td>
-                    <td className="py-4 px-6 text-sm text-gray-700">{employee.email}</td>
-                    <td className="py-4 px-6 text-sm text-gray-900">{employee.position}</td>
-                    <td className="py-4 px-6 text-sm text-gray-700">
-                      <span className="bg-blue-50 text-blue-700 px-2 py-1 rounded text-xs font-medium">
-                        {employee.department}
-                      </span>
-                    </td>
-                    <td className="py-4 px-6">
-                      <span className={`inline-flex px-2.5 py-0.5 text-xs font-medium rounded-full ${getStatusColor(employee.status)}`}>
-                        {employee.status === 'active' ? 'Hoạt động' : 'Đã nghỉ'}
-                      </span>
-                    </td>
-                    <td className="py-4 px-6 text-center flex items-center justify-center gap-2">
-                      <button
-                        onClick={() => handleOpenQr(employee)}
-                        className="text-purple-600 hover:text-purple-800 p-2 rounded-full hover:bg-purple-50"
-                        title="Mã QR"
-                      >
-                        <QrCode className="h-4 w-4" />
-                      </button>
-
-                      <button onClick={() => handleOpenModal(employee)} className="text-blue-600 hover:text-blue-800 p-2 rounded-full hover:bg-blue-50">
-                        <Edit className="h-4 w-4" />
-                      </button>
-                    </td>
-                  </tr>
-                ))
-              )}
-            </tbody>
-          </table>
-        </div>
-      </div>
-
-      {isModalOpen && (
-        <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center p-4 z-50 backdrop-blur-sm">
-          <div className="bg-white rounded-xl shadow-2xl max-w-lg w-full flex flex-col max-h-[90vh]">
-            <form onSubmit={handleSubmit} className="flex flex-col h-full">
-              <div className="p-6 border-b border-gray-200 flex items-start justify-between shrink-0">
-                <h2 className="text-xl font-bold text-gray-900">{editingEmployee ? 'Cập nhật Hồ sơ' : 'Thêm Nhân viên'}</h2>
-                <button type="button" onClick={handleCloseModal} className="text-gray-400 hover:text-gray-600"><X className="h-6 w-6" /></button>
-              </div>
-              <div className="p-6 space-y-5 overflow-y-auto flex-1">
-                <div className="flex items-center space-x-4 p-4 bg-gray-50 rounded-lg border border-gray-100">
-                  <img src={formData.avatar || `https://ui-avatars.com/api/?name=${formData.fullName || 'User'}&background=random`} alt="Preview" className="w-16 h-16 rounded-full object-cover border-2 border-white shadow-sm" />
-                  <div className="flex-1">
-                    <label className="block text-xs font-semibold text-gray-500 uppercase mb-1">Ảnh đại diện</label>
-                    <div className="flex gap-2">
-                      <input type="text" name="avatar" value={formData.avatar} onChange={handleChange} className="flex-1 px-3 py-2 border border-gray-300 rounded-lg text-sm" placeholder="Link ảnh..." />
-                      <button type="button" onClick={handleGenerateAvatar} className="px-3 py-2 bg-white border border-gray-300 text-gray-600 rounded-lg hover:bg-gray-50"><RefreshCw className="w-4 h-4" /></button>
-                    </div>
-                  </div>
-                </div>
-                <div className="space-y-4">
-                  <div><label className="block text-sm font-medium text-gray-700 mb-1">Họ và tên *</label><input type="text" name="fullName" value={formData.fullName} onChange={handleChange} className="w-full px-3 py-2 border border-gray-300 rounded-lg" required /></div>
-                  <div><label className="block text-sm font-medium text-gray-700 mb-1">Email *</label><input type="email" name="email" value={formData.email} onChange={handleChange} className="w-full px-3 py-2 border border-gray-300 rounded-lg" required /></div>
-                  <div className="grid grid-cols-2 gap-4">
-                    <div><label className="block text-sm font-medium text-gray-700 mb-1">Chức vụ</label><input type="text" name="position" value={formData.position} onChange={handleChange} className="w-full px-3 py-2 border border-gray-300 rounded-lg" /></div>
-                    <div>
-                      <label className="block text-sm font-medium text-gray-700 mb-1">Phòng ban</label>
-                      <select name="department" value={formData.department} onChange={handleChange} className="w-full px-3 py-2 border border-gray-300 rounded-lg bg-white">
-                        <option value="">-- Chọn --</option>
-                        {departments.map(dept => (<option key={dept._id} value={dept.name}>{dept.name}</option>))}
-                      </select>
-                    </div>
-                  </div>
-                  <div><label className="block text-sm font-medium text-gray-700 mb-1">Địa chỉ Ví</label><input type="text" name="walletAddress" value={formData.walletAddress} onChange={handleChange} className="w-full px-3 py-2 border border-gray-300 rounded-lg font-mono text-sm" placeholder="0x..." /></div>
-                  <div><label className="block text-sm font-medium text-gray-700 mb-1">Trạng thái</label><select name="status" value={formData.status} onChange={handleChange} className="w-full px-3 py-2 border border-gray-300 rounded-lg bg-white"><option value="active">Hoạt động</option><option value="inactive">Đã nghỉ</option></select></div>
-                </div>
-              </div>
-              <div className="p-6 border-t border-gray-200 bg-gray-50 rounded-b-xl flex justify-end space-x-3 shrink-0">
-                <button type="button" onClick={handleCloseModal} className="px-4 py-2 border border-gray-300 text-gray-700 rounded-lg hover:bg-gray-100">Hủy</button>
-                <button type="submit" className="px-6 py-2 bg-blue-600 text-white rounded-lg hover:bg-blue-700 font-medium">{editingEmployee ? 'Lưu' : 'Thêm'}</button>
-              </div>
-            </form>
-          </div>
-        </div>
-      )}
-
-      {qrModalOpen && qrEmployee && (
-        <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center p-4 z-50 backdrop-blur-sm">
-          <div className="bg-white rounded-xl shadow-2xl max-w-sm w-full text-center p-6">
-            <div className="flex justify-between items-start mb-4">
-              <h3 className="text-lg font-bold text-gray-900">Mã QR Nhân Viên</h3>
-              <button onClick={() => setQrModalOpen(false)} className="text-gray-400 hover:text-gray-600"><X className="w-5 h-5" /></button>
+                <input 
+                    type="text" 
+                    placeholder="Tìm theo mã, tên..." 
+                    className="pl-9 pr-4 py-2 border border-gray-300 rounded text-sm w-72 focus:border-green-600 focus:ring-1 focus:ring-green-600 outline-none transition-all shadow-sm"
+                    value={searchTerm}
+                    onChange={(e) => setSearchTerm(e.target.value)}
+                />
+                <Search className="absolute left-3 top-2.5 text-gray-400 w-4 h-4" />
             </div>
 
-            <div className="flex justify-center mb-6" ref={qrRef}>
-              <QRCodeCanvas
-                value={qrEmployee.id}
-                size={200}
-                level={"H"}
-                includeMargin={true}
-              />
-            </div>
-
-            <div className="mb-6">
-              <p className="font-bold text-gray-800 text-lg">{qrEmployee.fullName}</p>
-              <p className="text-sm text-gray-500">{qrEmployee.position}</p>
-              <p className="text-xs text-gray-400 font-mono mt-1">{qrEmployee.id}</p>
-            </div>
-
-            <button
-              onClick={downloadQRCode}
-              className="w-full py-2 bg-blue-600 text-white rounded-lg hover:bg-blue-700 flex items-center justify-center gap-2"
+            {/* NÚT XÓA NHIỀU (CHỈ HIỆN KHI CÓ CHỌN) */}
+            {selectedIds.length > 0 && (
+                 <button 
+                    onClick={handleDeleteSelected}
+                    className="flex items-center gap-1 px-4 py-2 bg-red-50 border border-red-200 text-red-600 rounded font-bold hover:bg-red-100 transition-colors animate-in fade-in"
+                >
+                    <Trash2 className="w-4 h-4" /> Xóa ({selectedIds.length})
+                </button>
+            )}
+            
+            <button 
+                onClick={handleExport}
+                className="flex items-center gap-2 px-4 py-2 bg-white border border-gray-300 text-gray-700 rounded font-medium hover:bg-gray-50 transition-colors shadow-sm"
             >
-              <Download className="w-4 h-4" /> Tải xuống
+                <FileSpreadsheet className="w-4 h-4 text-green-600" /> Xuất file 
             </button>
+            
+            {/* NÚT THÊM MỚI (MÀU XANH LÁ CHUẨN MISA/ERP) */}
+            <button 
+                onClick={() => handleOpenModal(null)}
+                className="bg-orange-600 text-white px-5 py-2 rounded-lg hover:bg-orange-700 transition-all flex items-center gap-2 shadow-sm font-medium"
+            >
+                <Plus className="w-5 h-5" /> Thêm mới nhân viên
+            </button>
+        </div>
+      </div>
+
+      {/* 2. TABLE AREA */}
+      <div className="flex-1 overflow-auto p-4">
+        <div className="bg-white border border-gray-300 shadow rounded-sm overflow-hidden">
+            <table className="w-full text-left border-collapse">
+                <thead className="bg-gray-100 text-gray-700 font-bold text-xs uppercase tracking-wider sticky top-0 z-10 border-b border-gray-200">
+                    <tr>
+                        <th className="p-3 border-r border-gray-200 w-10 text-center">
+                            <input 
+                                type="checkbox" 
+                                className="w-4 h-4 rounded text-green-600 focus:ring-green-500 cursor-pointer"
+                                checked={currentItems.length > 0 && selectedIds.length === currentItems.length}
+                                onChange={handleSelectAll}
+                            />
+                        </th>
+                        <th className="p-3 border-r border-gray-200 min-w-[100px]">Mã NV</th>
+                        <th className="p-3 border-r border-gray-200 min-w-[180px]">Tên nhân viên</th>
+                        <th className="p-3 border-r border-gray-200 min-w-[80px]">Giới tính</th>
+                        <th className="p-3 border-r border-gray-200 min-w-[100px]">Ngày sinh</th>
+                        <th className="p-3 border-r border-gray-200 min-w-[120px]">Số CMND</th>
+                        <th className="p-3 border-r border-gray-200 min-w-[150px]">Chức danh</th>
+                        <th className="p-3 border-r border-gray-200 min-w-[180px]">Tên đơn vị</th>
+                        <th className="p-3 border-r border-gray-200 min-w-[120px]">Số tài khoản</th>
+                        <th className="p-3 border-r border-gray-200 min-w-[150px]">Tên ngân hàng</th>
+                        <th className="p-3 border-r border-gray-200 min-w-[150px] text-blue-700 bg-blue-50/50">Ví Blockchain</th>
+                        <th className="p-3 border-b border-gray-200 text-center min-w-[110px] sticky right-0 bg-gray-100 shadow-l">CHỨC NĂNG</th>
+                    </tr>
+                </thead>
+                <tbody className="text-gray-800 text-sm">
+                    {currentItems.map((emp) => (
+                        <tr key={emp.id} className={`hover:bg-blue-50 transition-colors border-b border-gray-100 group ${selectedIds.includes(emp.id) ? 'bg-green-50' : ''}`}>
+                            <td className="p-2 border-r border-gray-100 text-center">
+                                <input 
+                                    type="checkbox" 
+                                    className="w-4 h-4 rounded text-green-600 focus:ring-green-500 cursor-pointer"
+                                    checked={selectedIds.includes(emp.id)}
+                                    onChange={() => handleSelectOne(emp.id)}
+                                />
+                            </td>
+                            <td className="p-2 border-r border-gray-100">{emp.code}</td>
+                            <td className="p-2 border-r border-gray-100 font-medium text-blue-700 cursor-pointer hover:underline" onClick={() => handleOpenModal(emp)}>
+                                {emp.fullName}
+                            </td>
+                            <td className="p-2 border-r border-gray-100">{emp.gender}</td>
+                            <td className="p-2 border-r border-gray-100">{emp.dob}</td>
+                            <td className="p-2 border-r border-gray-100">{emp.cmnd}</td>
+                            <td className="p-2 border-r border-gray-100">{emp.position}</td>
+                            <td className="p-2 border-r border-gray-100">{emp.department}</td>
+                            <td className="p-2 border-r border-gray-100">{emp.bankAccount}</td>
+                            <td className="p-2 border-r border-gray-100">{emp.bankName}</td>
+                            <td className="p-2 border-r border-gray-100 font-mono text-xs text-blue-600 truncate max-w-[120px]" title={emp.walletAddress}>
+                                {emp.walletAddress}
+                            </td>
+                            
+                            {/* CỘT CHỨC NĂNG (THEO YÊU CẦU: SỬA - QR - XÓA) */}
+                            <td className="p-2 text-center sticky right-0 bg-white group-hover:bg-blue-50 shadow-l border-l border-gray-100">
+                                <div className="flex items-center justify-center gap-3">
+                                    <span 
+                                        className="text-blue-600 font-bold text-xs cursor-pointer hover:underline uppercase"
+                                        onClick={() => handleOpenModal(emp)}
+                                    >
+                                        Sửa
+                                    </span>
+                                    <button onClick={() => {setQrEmployee(emp); setQrModalOpen(true)}} className="text-gray-500 hover:text-black transition-colors" title="Mã QR">
+                                        <QrCode size={15}/>
+                                    </button>
+                                    <button onClick={() => handleDeleteOne(emp)} className="text-gray-400 hover:text-red-600 transition-colors" title="Xóa nhân viên này">
+                                        <Trash2 size={15}/>
+                                    </button>
+                                </div>
+                            </td>
+                        </tr>
+                    ))}
+                    {/* HÀNG TRỐNG ĐỂ GIỮ KHUNG */}
+                    {Array.from({length: Math.max(0, 10 - currentItems.length)}).map((_, i) => (
+                        <tr key={`empty-${i}`}><td colSpan={13} className="p-4 border-b border-gray-50">&nbsp;</td></tr>
+                    ))}
+                </tbody>
+            </table>
+        </div>
+      </div>
+
+      {/* 3. PAGINATION */}
+      <div className="bg-white border-t border-gray-200 px-4 py-2 flex justify-between items-center text-xs text-gray-600">
+        <div>
+            Tổng số: <span className="font-bold text-gray-900">{filteredEmployees.length}</span> bản ghi | Đang chọn: <span className="font-bold text-green-600">{selectedIds.length}</span>
+        </div>
+        <div className="flex items-center gap-4">
+            <select 
+                value={itemsPerPage} 
+                onChange={(e) => setItemsPerPage(Number(e.target.value))}
+                className="border border-gray-300 rounded px-2 py-1 outline-none focus:border-green-600"
+            >
+                <option value={10}>10 bản ghi/trang</option>
+                <option value={20}>20 bản ghi/trang</option>
+                <option value={50}>50 bản ghi/trang</option>
+            </select>
+            <div className="flex items-center gap-1">
+                <button 
+                    onClick={() => setCurrentPage(p => Math.max(1, p - 1))} 
+                    disabled={currentPage === 1}
+                    className="p-1 border border-gray-300 rounded hover:bg-gray-100 disabled:opacity-50"
+                >
+                    <ChevronLeft size={14} />
+                </button>
+                <span className="px-2">Trang {currentPage}</span>
+                <button 
+                    onClick={() => setCurrentPage(p => Math.min(totalPages, p + 1))}
+                    disabled={currentPage === totalPages}
+                    className="p-1 border border-gray-300 rounded hover:bg-gray-100 disabled:opacity-50"
+                >
+                    <ChevronRight size={14} />
+                </button>
+            </div>
+        </div>
+      </div>
+
+      {/* --- MODAL FORM (CHI TIẾT NHƯ HÌNH MẪU) --- */}
+      {isModalOpen && (
+        <div className="fixed inset-0 bg-black/40 backdrop-blur-[1px] flex items-center justify-center p-4 z-50">
+          <div className="bg-white rounded shadow-2xl w-full max-w-4xl max-h-[90vh] flex flex-col overflow-hidden animate-in fade-in zoom-in duration-200">
+            
+            {/* Header */}
+            <div className="px-6 py-3 border-b border-gray-200 flex justify-between items-center bg-gray-50">
+              <h3 className="text-xl font-bold text-gray-800 flex items-center gap-2">
+                Thông tin nhân viên
+              </h3>
+              <div className="flex gap-4 items-center">
+                 <div className="flex gap-4 text-sm text-gray-600">
+                    <label className="flex items-center gap-1 cursor-pointer select-none"><input type="checkbox" className="rounded text-green-600 focus:ring-green-500"/> Là khách hàng</label>
+                    <label className="flex items-center gap-1 cursor-pointer select-none"><input type="checkbox" className="rounded text-green-600 focus:ring-green-500"/> Là nhà cung cấp</label>
+                 </div>
+                 <button onClick={() => setIsModalOpen(false)} className="text-gray-400 hover:text-red-500 transition-colors"><X size={24}/></button>
+              </div>
+            </div>
+
+            {/* Form Body */}
+            <div className="p-6 overflow-y-auto flex-1 custom-scrollbar bg-white">
+              <form id="empForm" onSubmit={handleSubmit} className="space-y-5">
+                {/* HÀNG 1 */}
+                <div className="grid grid-cols-12 gap-4">
+                   <div className="col-span-2">
+                      <label className="block text-xs font-bold text-gray-700 mb-1">Mã <span className="text-red-500">*</span></label>
+                      <input type="text" required value={formData.code} onChange={e => setFormData({...formData, code: e.target.value})} className="w-full px-3 h-8 border border-gray-300 rounded-sm text-sm focus:border-green-600 outline-none focus:ring-1 focus:ring-green-600" />
+                   </div>
+                   <div className="col-span-4">
+                      <label className="block text-xs font-bold text-gray-700 mb-1">Tên <span className="text-red-500">*</span></label>
+                      <input type="text" required value={formData.fullName} onChange={e => setFormData({...formData, fullName: e.target.value})} className="w-full px-3 h-8 border border-gray-300 rounded-sm text-sm focus:border-green-600 outline-none focus:ring-1 focus:ring-green-600" />
+                   </div>
+                   <div className="col-span-3">
+                      <label className="block text-xs font-bold text-gray-700 mb-1">Ngày sinh</label>
+                      <input type="text" placeholder="dd/mm/yyyy" value={formData.dob} onChange={e => setFormData({...formData, dob: e.target.value})} className="w-full px-3 h-8 border border-gray-300 rounded-sm text-sm focus:border-green-600 outline-none" />
+                   </div>
+                   <div className="col-span-3">
+                      <label className="block text-xs font-bold text-gray-700 mb-1">Giới tính</label>
+                      <div className="flex items-center gap-4 h-8 px-1">
+                         {['Nam', 'Nữ', 'Khác'].map(g => (
+                            <label key={g} className="flex items-center gap-1 text-sm cursor-pointer">
+                               <input type="radio" name="gender" value={g} checked={formData.gender === g} onChange={e => setFormData({...formData, gender: e.target.value as any})} className="text-green-600 focus:ring-green-500"/> {g}
+                            </label>
+                         ))}
+                      </div>
+                   </div>
+                </div>
+
+                {/* HÀNG 2 */}
+                <div className="grid grid-cols-12 gap-4">
+                   <div className="col-span-6">
+                      <label className="block text-xs font-bold text-gray-700 mb-1">Đơn vị <span className="text-red-500">*</span></label>
+                      <select value={formData.department} onChange={e => setFormData({...formData, department: e.target.value})} className="w-full px-3 h-8 border border-gray-300 rounded-sm text-sm bg-white focus:border-green-600 outline-none">
+                         {MOCK_DEPARTMENTS.map(d => <option key={d} value={d}>{d}</option>)}
+                      </select>
+                   </div>
+                   <div className="col-span-3">
+                      <label className="block text-xs font-bold text-gray-700 mb-1">Số CMND</label>
+                      <input type="text" value={formData.cmnd} onChange={e => setFormData({...formData, cmnd: e.target.value})} className="w-full px-3 h-8 border border-gray-300 rounded-sm text-sm focus:border-green-600 outline-none" />
+                   </div>
+                   <div className="col-span-3">
+                      <label className="block text-xs font-bold text-gray-700 mb-1">Ngày cấp</label>
+                      <input type="text" placeholder="dd/mm/yyyy" value={formData.issueDate} onChange={e => setFormData({...formData, issueDate: e.target.value})} className="w-full px-3 h-8 border border-gray-300 rounded-sm text-sm focus:border-green-600 outline-none" />
+                   </div>
+                </div>
+
+                {/* HÀNG 3 */}
+                <div className="grid grid-cols-12 gap-4">
+                   <div className="col-span-6">
+                      <label className="block text-xs font-bold text-gray-700 mb-1">Chức danh</label>
+                      <input type="text" value={formData.position} onChange={e => setFormData({...formData, position: e.target.value})} className="w-full px-3 h-8 border border-gray-300 rounded-sm text-sm focus:border-green-600 outline-none" />
+                   </div>
+                   <div className="col-span-6">
+                      <label className="block text-xs font-bold text-gray-700 mb-1">Nơi cấp</label>
+                      <input type="text" value={formData.issuePlace} onChange={e => setFormData({...formData, issuePlace: e.target.value})} className="w-full px-3 h-8 border border-gray-300 rounded-sm text-sm focus:border-green-600 outline-none" />
+                   </div>
+                </div>
+
+                {/* HÀNG 4 */}
+                <div>
+                   <label className="block text-xs font-bold text-gray-700 mb-1">Địa chỉ</label>
+                   <input type="text" value={formData.address} onChange={e => setFormData({...formData, address: e.target.value})} className="w-full px-3 h-8 border border-gray-300 rounded-sm text-sm focus:border-green-600 outline-none" />
+                </div>
+
+                {/* HÀNG 5 */}
+                <div className="grid grid-cols-12 gap-4">
+                   <div className="col-span-4">
+                      <label className="block text-xs font-bold text-gray-700 mb-1">ĐT di động</label>
+                      <input type="text" value={formData.mobile} onChange={e => setFormData({...formData, mobile: e.target.value})} className="w-full px-3 h-8 border border-gray-300 rounded-sm text-sm focus:border-green-600 outline-none" />
+                   </div>
+                   <div className="col-span-4">
+                      <label className="block text-xs font-bold text-gray-700 mb-1">ĐT cố định</label>
+                      <input type="text" value={formData.landline} onChange={e => setFormData({...formData, landline: e.target.value})} className="w-full px-3 h-8 border border-gray-300 rounded-sm text-sm focus:border-green-600 outline-none" />
+                   </div>
+                   <div className="col-span-4">
+                      <label className="block text-xs font-bold text-gray-700 mb-1">Email</label>
+                      <input type="email" value={formData.email} onChange={e => setFormData({...formData, email: e.target.value})} className="w-full px-3 h-8 border border-gray-300 rounded-sm text-sm focus:border-green-600 outline-none" />
+                   </div>
+                </div>
+
+                {/* HÀNG 6 - NGÂN HÀNG & VÍ BLOCKCHAIN */}
+                <div className="grid grid-cols-12 gap-4">
+                   <div className="col-span-3">
+                      <label className="block text-xs font-bold text-gray-700 mb-1">Tài khoản ngân hàng</label>
+                      <input type="text" value={formData.bankAccount} onChange={e => setFormData({...formData, bankAccount: e.target.value})} className="w-full px-3 h-8 border border-gray-300 rounded-sm text-sm focus:border-green-600 outline-none" />
+                   </div>
+                   <div className="col-span-3">
+                      <label className="block text-xs font-bold text-gray-700 mb-1">Tên ngân hàng</label>
+                      <input type="text" value={formData.bankName} onChange={e => setFormData({...formData, bankName: e.target.value})} className="w-full px-3 h-8 border border-gray-300 rounded-sm text-sm focus:border-green-600 outline-none" />
+                   </div>
+                   <div className="col-span-3">
+                      <label className="block text-xs font-bold text-gray-700 mb-1">Chi nhánh</label>
+                      <input type="text" value={formData.bankBranch} onChange={e => setFormData({...formData, bankBranch: e.target.value})} className="w-full px-3 h-8 border border-gray-300 rounded-sm text-sm focus:border-green-600 outline-none" />
+                   </div>
+                   {/* Ví Blockchain */}
+                   <div className="col-span-3">
+                      <label className="block text-xs font-bold text-blue-800 mb-1 flex items-center gap-1">
+                        <Wallet size={12}/> Ví Blockchain
+                      </label>
+                      <input type="text" value={formData.walletAddress} onChange={e => setFormData({...formData, walletAddress: e.target.value})} placeholder="0x..." className="w-full px-3 h-8 border border-blue-200 rounded-sm text-sm font-mono text-blue-700 focus:border-blue-500 outline-none" />
+                   </div>
+                </div>
+
+              </form>
+            </div>
+
+            {/* Footer Modal Actions */}
+            <div className="px-6 py-4 border-t border-gray-200 bg-gray-50 flex justify-between">
+               <button onClick={() => setIsModalOpen(false)} className="px-4 py-2 border border-gray-400 text-gray-700 rounded-sm text-sm font-medium hover:bg-gray-100 min-w-[80px]">Hủy</button>
+               <div className="flex gap-2">
+                   {/* <button onClick={() => setIsModalOpen(false)} className="px-4 py-2 border border-gray-400 text-gray-700 rounded-sm text-sm font-medium hover:bg-gray-100 min-w-[80px]">Cắt</button> */}
+                   <button 
+                     onClick={() => document.getElementById('empForm')?.dispatchEvent(new Event('submit', { cancelable: true, bubbles: true }))}
+                     className="px-4 py-2 bg-green-600 text-white rounded-sm text-sm font-bold hover:bg-green-700 shadow-sm min-w-[100px]"
+                   >
+                     Lưu lại
+                   </button>
+               </div>
+            </div>
+
           </div>
         </div>
       )}
 
+      {/* QR MODAL */}
+      {qrModalOpen && qrEmployee && (
+        <div className="fixed inset-0 bg-black/60 flex items-center justify-center p-4 z-50 backdrop-blur-sm">
+           <div className="bg-white rounded-lg shadow-xl p-6 text-center max-w-sm w-full relative animate-in zoom-in duration-200">
+              <button onClick={() => setQrModalOpen(false)} className="absolute top-4 right-4 text-gray-400 hover:text-gray-600"><X size={20}/></button>
+              <h3 className="font-bold text-lg mb-4 text-gray-800">Mã QR Định Danh</h3>
+              <div className="flex justify-center mb-4 p-2 border rounded" ref={qrRef}>
+                 <QRCodeCanvas value={qrEmployee.code} size={180} />
+              </div>
+              <p className="font-bold text-lg text-green-700">{qrEmployee.fullName}</p>
+              <p className="text-sm text-gray-500 font-mono mb-4">{qrEmployee.code}</p>
+              
+              <div className="text-xs text-gray-500 mb-4 bg-gray-50 p-2 rounded border border-gray-100">
+                 Ví Blockchain: <span className="font-mono text-blue-600">{qrEmployee.walletAddress || 'Chưa liên kết'}</span>
+              </div>
+
+              <button className="w-full py-2 bg-blue-600 text-white rounded hover:bg-blue-700 flex justify-center items-center gap-2 font-medium">
+                  <Download size={16}/> Tải xuống QR
+              </button>
+           </div>
+        </div>
+      )}
     </div>
   );
 };
